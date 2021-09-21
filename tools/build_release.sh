@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -x
 ######################################
 ##
 ## Build WP2Static S3 Deployment Addon
@@ -23,7 +23,7 @@ mkdir $TMP_DIR/wp2static-addon-s3
 # clear dev dependencies
 rm -Rf $EXEC_DIR/vendor/*
 # load prod deps and optimize loader
-composer install --quiet --no-dev --optimize-autoloader
+./composer install --quiet --no-dev
 
 # cp all required sources to build dir
 cp -r $EXEC_DIR/*.php $TMP_DIR/wp2static-addon-s3/
@@ -50,4 +50,4 @@ cd $EXEC_DIR
 # clear dev dependencies
 rm -Rf $EXEC_DIR/vendor/*
 # load prod deps
-composer install --quiet
+./composer install --quiet
