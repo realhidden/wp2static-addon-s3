@@ -42,6 +42,15 @@ class Deployer {
             return;
         }
 
+        $offset = -1;
+        if (isset($_REQUEST['offset'])){
+            $offset = (int)$_REQUEST['offset'];
+        }
+        $limit = -1;
+        if (isset($_REQUEST['limit'])){
+            $limit = (int)$_REQUEST['limit'];
+        }
+
         $namespace = self::DEFAULT_NAMESPACE;
 
         // instantiate S3 client
@@ -70,6 +79,12 @@ class Deployer {
         $file_count = 0;
         foreach ( $files as $filename ) {
             $file_count++;
+            if (($file_count < $offset) && ($offset !== -1)){
+                continue;
+            }
+            if (($file_count > $offset + $limit) && $limit !== -1 && $offset !== -1) {
+                continue;
+            }
             // reset put_data
             $put_data = $base_put_data;
             $base_name = basename( $filename );
@@ -108,7 +123,7 @@ class Deployer {
                     $hash,
                 );
 
-                \WP2Static\WsLog::l('Uploading ' . $filename, WP2Static\WP2STATIC_PHASES::DEPLOY, $file_count);
+                \WP2Static\WsLog::l('Uploading ' . $filename, \WP2Static\WP2STATIC_PHASES::DEPLOY, $file_count);
 
                 if ( $is_cached ) {
                     //\WP2Static\WsLog::l('[' . $file_count . '] Skip ' . $s3_key . ' from ' . $filename);
@@ -124,7 +139,7 @@ class Deployer {
                 $put_data['ContentType'] = $mime_type;
                 $put_data['Body'] = fopen($filename, 'r+');
 
-                \WP2Static\WsLog::l('[' . $file_count . '] Uploading ' . $s3_key . ' from ' . $filename);
+                //\WP2Static\WsLog::l('[' . $file_count . '] Uploading ' . $s3_key . ' from ' . $filename);
                 $result = $s3->putObject( $put_data );
 
                 if ( $result['@metadata']['statusCode'] === 200 ) {
