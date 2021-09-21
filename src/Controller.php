@@ -259,7 +259,7 @@ class Controller {
         if ( $enabled_deployer !== 'wp2static-addon-s3' ) {
             return;
         }
-
+        \WP2Static\WsLog::setPhase(\WP2Static\WP2STATIC_PHASES::DEPLOY);
         \WP2Static\WsLog::l( 'S3 Addon deploying' );
 
         $s3_deployer = new Deployer();

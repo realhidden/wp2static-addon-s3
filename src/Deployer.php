@@ -21,6 +21,21 @@ class Deployer {
 
     public function __construct() {}
 
+    public function getFiles(string $processed_site_path){
+        // iterate each file in ProcessedSite
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator(
+                $processed_site_path,
+                RecursiveDirectoryIterator::SKIP_DOTS
+            )
+        );
+        $list = array();
+        foreach ( $iterator as $filename => $file_object ) {
+            $list[] = $filename;
+        }
+        return $list;
+    }
+
     public function uploadFiles( string $processed_site_path ) : void {
         // check if dir exists
         if ( ! is_dir( $processed_site_path ) ) {
@@ -32,13 +47,8 @@ class Deployer {
         // instantiate S3 client
         $s3 = self::s3Client();
 
-        // iterate each file in ProcessedSite
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator(
-                $processed_site_path,
-                RecursiveDirectoryIterator::SKIP_DOTS
-            )
-        );
+        $files = $this->getFiles($processed_site_path);
+        \WP2Static\WsLog::setAllItemCount(count($files));
 
         $object_acl = Controller::getValue( 's3ObjectACL' );
         $put_data = [
@@ -58,7 +68,7 @@ class Deployer {
         $cf_stale_paths = [];
 
         $file_count = 0;
-        foreach ( $iterator as $filename => $file_object ) {
+        foreach ( $files as $filename ) {
             $file_count++;
             // reset put_data
             $put_data = $base_put_data;
@@ -98,9 +108,7 @@ class Deployer {
                     $hash,
                 );
 
-                if ($file_count % 1000 == 0) {
-                    \WP2Static\WsLog::l('[' . $file_count . '] Processing S3 upload...');
-                }
+                \WP2Static\WsLog::l('Uploading ' . $filename, WP2Static\WP2STATIC_PHASES::DEPLOY, $file_count);
 
                 if ( $is_cached ) {
                     //\WP2Static\WsLog::l('[' . $file_count . '] Skip ' . $s3_key . ' from ' . $filename);
@@ -114,7 +122,7 @@ class Deployer {
 
                 $put_data['Key'] = $s3_key;
                 $put_data['ContentType'] = $mime_type;
-                $put_data['Body'] = file_get_contents( $filename );
+                $put_data['Body'] = fopen($filename, 'r+');
 
                 \WP2Static\WsLog::l('[' . $file_count . '] Uploading ' . $s3_key . ' from ' . $filename);
                 $result = $s3->putObject( $put_data );
