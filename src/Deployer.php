@@ -54,10 +54,14 @@ class Deployer {
         $base_put_data = $put_data;
 
         $cf_max_paths = Controller::getValue( 'cfMaxPathsToInvalidate' );
-        $cf_max_paths = $cf_max_paths ? intval( $cf_max_paths ) : 0;
+        $cf_max_paths = $cf_max_paths ? intval( $cf_max_paths ) : 50;
         $cf_stale_paths = [];
 
+        $file_count = 0;
         foreach ( $iterator as $filename => $file_object ) {
+            $file_count++;
+            // reset put_data
+            $put_data = $base_put_data;
             $base_name = basename( $filename );
             if ( $base_name != '.' && $base_name != '..' ) {
                 $real_filepath = realpath( $filename );
@@ -85,17 +89,8 @@ class Deployer {
                     ltrim( $cache_key, '/' ) :
                     ltrim( $cache_key, '/' );
 
-                $mime_type = MimeTypes::guessMimeType( $filename );
-                if ( 'text/' === substr( $mime_type, 0, 5 ) ) {
-                    $mime_type = $mime_type . '; charset=UTF-8';
-                }
-
-                $put_data['Key'] = $s3_key;
-                $put_data['ContentType'] = $mime_type;
-                $put_data_hash = md5( (string) json_encode( $put_data ) );
-                $put_data['Body'] = file_get_contents( $filename );
-                $body_hash = md5( (string) $put_data['Body'] );
-                $hash = md5( $put_data_hash . $body_hash );
+                $body_hash = md5_file( $filename );
+                $hash = $body_hash;
 
                 $is_cached = \WP2Static\DeployCache::fileisCached(
                     $cache_key,
@@ -103,10 +98,25 @@ class Deployer {
                     $hash,
                 );
 
+                if ($file_count % 1000 == 0) {
+                    \WP2Static\WsLog::l('[' . $file_count . '] Processing S3 upload...');
+                }
+
                 if ( $is_cached ) {
+                    //\WP2Static\WsLog::l('[' . $file_count . '] Skip ' . $s3_key . ' from ' . $filename);
                     continue;
                 }
 
+                $mime_type = MimeTypes::guessMimeType( $filename );
+                if ( 'text/' === substr( $mime_type, 0, 5 ) ) {
+                    $mime_type = $mime_type . '; charset=UTF-8';
+                }
+
+                $put_data['Key'] = $s3_key;
+                $put_data['ContentType'] = $mime_type;
+                $put_data['Body'] = file_get_contents( $filename );
+
+                \WP2Static\WsLog::l('[' . $file_count . '] Uploading ' . $s3_key . ' from ' . $filename);
                 $result = $s3->putObject( $put_data );
 
                 if ( $result['@metadata']['statusCode'] === 200 ) {
@@ -129,6 +139,7 @@ class Deployer {
         $put_data = $base_put_data;
         $redirects = apply_filters( 'wp2static_list_redirects', [] );
 
+        \WP2Static\WsLog::l('Processing Redirects ('.count($redirects).') ...');
         foreach ( $redirects as $redirect ) {
             $cache_key = $redirect['url'];
 
@@ -171,6 +182,7 @@ class Deployer {
                 }
             }
         }
+        \WP2Static\WsLog::l('Redirects done.');
 
         $distribution_id = Controller::getValue( 'cfDistributionID' );
         $num_stale = count( $cf_stale_paths );
@@ -184,6 +196,7 @@ class Deployer {
                 self::invalidateItems( $distribution_id, $cf_stale_paths );
             }
         }
+        \WP2Static\WsLog::l('Uploadfiles done.');
     }
 
     public static function s3Client() : \Aws\S3\S3Client {
